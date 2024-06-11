@@ -1,7 +1,7 @@
 // Path: src/Routes/index.ts
 import { Request, Response, Router } from "express";
-import { identify } from "../controller/checkIdentity";
-import { dataCreation } from "../controller/dataCreation";
+import { Identity } from "../controller/checkIdentity";
+import { DataCreation } from "../controller/dataCreation";
 
 export const routes = Router();
 
@@ -11,5 +11,5 @@ routes.get("/", (req: Request, res: Response) => {
     });
 });
 
-routes.post("/identify/", identify);
-routes.post("/create/", dataCreation.createData);
+routes.post("/identify/", Identity.identify);
+routes.post("/create/", DataCreation.createData);

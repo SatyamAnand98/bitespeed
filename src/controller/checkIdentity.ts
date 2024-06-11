@@ -1,99 +1,148 @@
 // Path: src/controller/checkIdentity.ts
 import { Request, Response } from "express";
 import db from "../database/";
-import { identityQueryBuilder } from "../helper/identity.queryBuilder";
+import { NestedQueryBuilder } from "../helper/identity.queryBuilder";
 import { IResponse } from "../store/interfaces/response.interface";
 import { EHttpStatus } from "../store/enums/http.status.enum";
 import { identityValidator } from "../helper/validators/identity.validator";
 
 const pool = db.getPool();
 
-export async function identify(req: Request, res: Response) {
-    try {
-        let data = await identityValidator.validateAsync(req.body);
-        const { email, phoneNumber } = data;
+export class Identity {
+    static async identify(req: Request, res: Response) {
+        try {
+            const data = await identityValidator.validateAsync(req.body);
+            const { email, phone_number } = data;
+            const { query, params } = new NestedQueryBuilder()
+                .setEmail(email)
+                .setPhoneNumber(phone_number)
+                .build();
 
-        const { query, params } = identityQueryBuilder
-            .setEmail(email)
-            .setPhoneNumber(phoneNumber)
-            .build();
+            const initialResult = await pool.query(query, params);
 
-        const result = await pool.query(query, params);
+            if (initialResult.rows.length === 0) {
+                const insertQuery = `
+                    INSERT INTO Contact (email, phone_number, linkPrecedence) 
+                    VALUES ($1, $2, $3) RETURNING *
+                `;
+                const insertParams = [
+                    email || null,
+                    phone_number || null,
+                    "primary",
+                ];
+                const insertResult = await pool.query(
+                    insertQuery,
+                    insertParams
+                );
 
-        if (result.rows.length === 0) {
-            const insertQuery =
-                "INSERT INTO Contact (email, phoneNumber, linkPrecedence) VALUES ($1, $2, $3) RETURNING *";
-            const insertParams = [
-                email || null,
-                phoneNumber || null,
-                "primary",
-            ];
-            const insertResult = await pool.query(insertQuery, insertParams);
+                const newContact = insertResult.rows[0];
+                const responseObj: IResponse = {
+                    data: {
+                        contact: {
+                            primaryContactId: newContact.id,
+                            emails: [newContact.email].filter(Boolean),
+                            phoneNumbers: [newContact.phone_number].filter(
+                                Boolean
+                            ),
+                            secondaryContactIds: [],
+                        },
+                    },
+                    status: EHttpStatus.OK,
+                    message: "Contact identified",
+                    meta: {
+                        error: false,
+                        message: "Contact identified",
+                    },
+                };
 
-            const newContact = insertResult.rows[0];
-            return res.status(200).json({
-                contact: {
-                    primaryContatctId: newContact.id,
-                    emails: [newContact.email].filter(Boolean),
-                    phoneNumbers: [newContact.phoneNumber].filter(Boolean),
-                    secondaryContactIds: [],
-                },
-            });
-        }
+                return res.status(EHttpStatus.OK).json(responseObj);
+            }
 
-        const primaryContact = result.rows.find(
-            (row) => row.linkprecedence === "primary"
-        );
-        const secondaryContacts = result.rows.filter(
-            (row) => row.linkprecedence === "secondary"
-        );
+            const contactIds = new Set<number>(
+                initialResult.rows.map((row) => row.id)
+            );
+            const linkedIds = new Set<number>(
+                initialResult.rows.map((row) => row.linkedid).filter(Boolean)
+            );
+            let allContacts = [...initialResult.rows];
 
-        let emails = new Set();
-        let phoneNumbers = new Set();
-        let secondaryContactIds = new Set();
+            while (linkedIds.size > 0) {
+                const idArray = Array.from(linkedIds);
+                linkedIds.clear();
 
-        if (primaryContact) {
+                const relatedQuery = `
+                    SELECT * FROM Contact 
+                    WHERE id = ANY($1::int[])
+                    OR linkedid = ANY($1::int[])
+                `;
+                const relatedResult = await pool.query(relatedQuery, [idArray]);
+
+                for (const row of relatedResult.rows) {
+                    if (!contactIds.has(row.id)) {
+                        contactIds.add(row.id);
+                        allContacts.push(row);
+
+                        if (row.linkedid && !contactIds.has(row.linkedid)) {
+                            linkedIds.add(row.linkedid);
+                        }
+                    }
+                }
+            }
+
+            const primaryContact =
+                allContacts.find(
+                    (contact) => contact.linkprecedence === "primary"
+                ) || allContacts[0];
+            const secondaryContacts = allContacts.filter(
+                (contact) => contact.linkprecedence === "secondary"
+            );
+
+            const emails = new Set<string>();
+            const phoneNumbers = new Set<string>();
+            const secondaryContactIds = new Set<number>();
+
             emails.add(primaryContact.email);
-            phoneNumbers.add(primaryContact.phoneNumber);
-        }
+            phoneNumbers.add(primaryContact.phone_number);
 
-        for (let contact of secondaryContacts) {
-            emails.add(contact.email);
-            phoneNumbers.add(contact.phoneNumber);
-            secondaryContactIds.add(contact.id);
-        }
+            for (let contact of secondaryContacts) {
+                if (contact.email) emails.add(contact.email);
+                if (contact.phone_number)
+                    phoneNumbers.add(contact.phone_number);
+                secondaryContactIds.add(contact.id);
+            }
 
-        const responseObj: IResponse = {
-            data: {
-                contact: {
-                    primaryContatctId: primaryContact.id,
-                    emails: Array.from(emails).filter(Boolean),
-                    phoneNumbers: Array.from(phoneNumbers).filter(Boolean),
-                    secondaryContactIds: Array.from(secondaryContactIds),
+            const responseObj: IResponse = {
+                data: {
+                    contact: {
+                        primaryContactId: primaryContact.id,
+                        emails: Array.from(emails).filter(Boolean),
+                        phoneNumbers: Array.from(phoneNumbers).filter(Boolean),
+                        secondaryContactIds: Array.from(secondaryContactIds),
+                    },
                 },
-            },
-            status: EHttpStatus.OK,
-            message: "Contact identified",
-            meta: {
-                error: false,
+                status: EHttpStatus.OK,
                 message: "Contact identified",
-            },
-        };
+                meta: {
+                    error: false,
+                    message: "Contact identified",
+                },
+            };
 
-        res.status(EHttpStatus.OK).json(responseObj);
-    } catch (error: any) {
-        console.error("Error in identifying contact: ", error.message);
-        const responseObj: IResponse = {
-            data: null,
-            status: error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR,
-            message: "Internal Server Error",
-            meta: {
-                error: true,
-                message: error.message,
-            },
-        };
-        res.status(error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR).json(
-            responseObj
-        );
+            res.status(EHttpStatus.OK).json(responseObj);
+        } catch (error: any) {
+            console.error("Error in identifying contact: ", error.message);
+            const responseObj: IResponse = {
+                data: null,
+                status: error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR,
+                message: "Internal Server Error",
+                meta: {
+                    error: true,
+                    message: error.message,
+                },
+            };
+            res.status(error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR).json(
+                responseObj
+            );
+        }
     }
 }

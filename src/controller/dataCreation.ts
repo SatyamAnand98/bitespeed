@@ -6,14 +6,14 @@ import { IResponse } from "../store/interfaces/response.interface";
 import { EHttpStatus } from "../store/enums/http.status.enum";
 import { Pool } from "pg";
 
-class DataCreation {
+export class DataCreation {
     // private pool: Pool;
 
     // constructor() {
     //     this.pool = db.getPool();
     // }
 
-    public async createData(req: Request, res: Response) {
+    public static async createData(req: Request, res: Response) {
         try {
             const pool: Pool = db.getPool();
             const data = await contactCreationValidator.validateAsync(req.body);
@@ -21,23 +21,25 @@ class DataCreation {
             const responses = [];
 
             for (const contact of data) {
-                const { email, phoneNumber } = contact;
+                const { email, phone_number } = contact;
 
                 let query =
-                    "SELECT * FROM Contact WHERE email = $1 OR phoneNumber = $2";
-                const params = [email || null, phoneNumber || null];
+                    "SELECT * FROM Contact WHERE email = $1 OR phone_number = $2";
+                const params = [email || null, phone_number || null];
                 const result = await pool.query(query, params);
 
                 const exactMatch = result.rows.find(
                     (row) =>
-                        row.email === email && row.phoneNumber === phoneNumber
+                        row.email === email && row.phone_number === phone_number
                 );
 
                 if (exactMatch) {
                     responses.push({
                         primaryContactId: exactMatch.linkedId || exactMatch.id,
                         emails: [exactMatch.email].filter(Boolean),
-                        phoneNumbers: [exactMatch.phoneNumber].filter(Boolean),
+                        phone_numbers: [exactMatch.phone_number].filter(
+                            Boolean
+                        ),
                         secondaryContactIds:
                             exactMatch.linkPrecedence === "secondary"
                                 ? [exactMatch.id]
@@ -57,10 +59,10 @@ class DataCreation {
                     primaryContactId = primaryContact.id;
 
                     const insertQuery =
-                        "INSERT INTO Contact (email, phoneNumber, linkedId, linkPrecedence) VALUES ($1, $2, $3, $4) RETURNING *";
+                        "INSERT INTO Contact (email, phone_number, linkedId, linkPrecedence) VALUES ($1, $2, $3, $4) RETURNING *";
                     const insertParams = [
                         email || null,
-                        phoneNumber || null,
+                        phone_number || null,
                         primaryContactId,
                         "secondary",
                     ];
@@ -71,10 +73,10 @@ class DataCreation {
                     newContact = insertResult.rows[0];
                 } else {
                     const insertQuery =
-                        "INSERT INTO Contact (email, phoneNumber, linkPrecedence) VALUES ($1, $2, $3) RETURNING *";
+                        "INSERT INTO Contact (email, phone_number, linkPrecedence) VALUES ($1, $2, $3) RETURNING *";
                     const insertParams = [
                         email || null,
-                        phoneNumber || null,
+                        phone_number || null,
                         "primary",
                     ];
                     const insertResult = await pool.query(
@@ -88,7 +90,7 @@ class DataCreation {
                 responses.push({
                     primaryContactId: primaryContactId,
                     emails: [newContact.email].filter(Boolean),
-                    phoneNumbers: [newContact.phoneNumber].filter(Boolean),
+                    phone_numbers: [newContact.phone_number].filter(Boolean),
                     secondaryContactIds:
                         newContact.linkPrecedence === "secondary"
                             ? [newContact.id]
@@ -110,7 +112,7 @@ class DataCreation {
 
             res.status(201).json(responseObj);
         } catch (error: any) {
-            console.error("Error creating data: ", error);
+            console.error("Error creating data: ", error.message);
             const responseObj: IResponse = {
                 data: null,
                 status: error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR,
@@ -126,5 +128,3 @@ class DataCreation {
         }
     }
 }
-
-export const dataCreation = new DataCreation();

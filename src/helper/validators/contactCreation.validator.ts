@@ -1,15 +1,26 @@
 // Path: src/helper/validators/contactCreation.validator.ts
-import joi from "joi";
+import Joi from "joi";
 
-export const contactCreationValidator = joi
-    .array()
+export const contactCreationValidator = Joi.array()
     .items(
-        joi
-            .object({
-                email: joi.string().email().optional().allow(null),
-                phoneNumber: joi.string().optional().allow(null),
+        Joi.object({
+            email: Joi.string().email().allow(null, "").empty("").default(null),
+            phone_number: Joi.string().allow(null, "").empty("").default(null),
+        })
+            .custom((value, helpers) => {
+                const { email, phone_number } = value;
+                if (!email && !phone_number) {
+                    return helpers.error("any.required");
+                }
+                return value;
+            }, "atLeastOne")
+            .messages({
+                "any.required":
+                    "At least one of 'email' or 'phone_number' must be provided",
             })
-            .or("email", "phoneNumber")
-            .required()
     )
-    .required();
+    .required()
+    .min(1)
+    .messages({
+        "array.min": "At least one contact must be provided",
+    });
