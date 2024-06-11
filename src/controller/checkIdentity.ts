@@ -20,6 +20,11 @@ export class Identity {
 
             const initialResult = await pool.query(query, params);
 
+            const exactMatch = initialResult.rows.find(
+                (row) =>
+                    row.email === email && row.phone_number === phone_number
+            );
+
             if (initialResult.rows.length === 0) {
                 const insertQuery = `
                     INSERT INTO Contact (email, phone_number, linkPrecedence) 
@@ -89,10 +94,48 @@ export class Identity {
                 }
             }
 
-            const primaryContact =
-                allContacts.find(
-                    (contact) => contact.linkprecedence === "primary"
-                ) || allContacts[0];
+            let primaryContacts = allContacts.filter(
+                (contact) => contact.linkprecedence === "primary"
+            );
+
+            if (primaryContacts.length > 1) {
+                // updating contact whose phone_number is same as incoming request as secondary contact
+                let secondaryContact = primaryContacts.find((contact) => {
+                    return contact.email !== email;
+                });
+
+                secondaryContact.linkprecedence = "secondary";
+
+                const primaryContactWithoutSecondary = primaryContacts.filter(
+                    (contact) => contact.email === email
+                );
+
+                allContacts = [
+                    secondaryContact,
+                    ...primaryContactWithoutSecondary,
+                    ...allContacts.filter(
+                        (contact) => contact.linkprecedence !== "primary"
+                    ),
+                ];
+
+                if (secondaryContact) {
+                    const updateQuery = `
+                        UPDATE Contact 
+                        SET linkprecedence = 'secondary', linkedid = $1
+                        WHERE id = $2
+                    `;
+                    await pool.query(updateQuery, [
+                        primaryContactWithoutSecondary[0].id,
+                        secondaryContact.id,
+                    ]);
+                }
+
+                // removing secondaryContact from primaryContacts
+                primaryContacts = primaryContacts.filter(
+                    (contact) => contact.email === email
+                );
+            }
+
             const secondaryContacts = allContacts.filter(
                 (contact) => contact.linkprecedence === "secondary"
             );
@@ -101,8 +144,10 @@ export class Identity {
             const phoneNumbers = new Set<string>();
             const secondaryContactIds = new Set<number>();
 
-            emails.add(primaryContact.email);
-            phoneNumbers.add(primaryContact.phone_number);
+            primaryContacts.forEach((contact) => {
+                emails.add(contact.email);
+                phoneNumbers.add(contact.phone_number);
+            });
 
             for (let contact of secondaryContacts) {
                 if (contact.email) emails.add(contact.email);
@@ -114,7 +159,9 @@ export class Identity {
             const responseObj: IResponse = {
                 data: {
                     contact: {
-                        primaryContactId: primaryContact.id,
+                        primaryContactId: primaryContacts.map(
+                            (contact) => contact.id
+                        ),
                         emails: Array.from(emails).filter(Boolean),
                         phoneNumbers: Array.from(phoneNumbers).filter(Boolean),
                         secondaryContactIds: Array.from(secondaryContactIds),
