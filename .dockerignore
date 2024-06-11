@@ -1,6 +1,6 @@
-node_modules
-public
-.env
-package-lock.json
 build
+node_modules
+.env
+.gitignore
+package-lock.json
 run.sh

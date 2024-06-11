@@ -20,11 +20,6 @@ export class Identity {
 
             const initialResult = await pool.query(query, params);
 
-            const exactMatch = initialResult.rows.find(
-                (row) =>
-                    row.email === email && row.phone_number === phone_number
-            );
-
             if (initialResult.rows.length === 0) {
                 const insertQuery = `
                     INSERT INTO Contact (email, phone_number, linkPrecedence) 
@@ -97,6 +92,38 @@ export class Identity {
             let primaryContacts = allContacts.filter(
                 (contact) => contact.linkprecedence === "primary"
             );
+
+            const exactMatch = initialResult.rows.find(
+                (row) =>
+                    row.email === email && row.phone_number === phone_number
+            );
+
+            if (
+                !exactMatch &&
+                initialResult.rows.length > 0 &&
+                primaryContacts.length === 1
+            ) {
+                // creating a new contact with the req data
+                const insertQuery = `
+                    INSERT INTO Contact (email, phone_number, linkPrecedence, linkedid) 
+                    VALUES ($1, $2, $3, $4) RETURNING *
+                `;
+
+                const insertParams = [
+                    email || null,
+                    phone_number || null,
+                    "secondary",
+                    primaryContacts[0].id,
+                ];
+
+                const insertResult = await pool.query(
+                    insertQuery,
+                    insertParams
+                );
+
+                const newContact = insertResult.rows[0];
+                allContacts.push(newContact);
+            }
 
             if (primaryContacts.length > 1) {
                 // updating contact whose phone_number is same as incoming request as secondary contact
@@ -177,7 +204,7 @@ export class Identity {
 
             res.status(EHttpStatus.OK).json(responseObj);
         } catch (error: any) {
-            console.error("Error in identifying contact: ", error.message);
+            console.error("Error in identifying contact: ", error);
             const responseObj: IResponse = {
                 data: null,
                 status: error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR,

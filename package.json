@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn --pretty --transpile-only app.ts",
     "start": "node build/app.js",
-    "build": "tsc"
+    "build": "rm -rf ./build && tsc"
   },
   "keywords": [],
   "author": "",

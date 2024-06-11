@@ -112,7 +112,7 @@ export class DataCreation {
 
             res.status(201).json(responseObj);
         } catch (error: any) {
-            console.error("Error creating data: ", error.message);
+            console.error("Error creating data: ", error);
             const responseObj: IResponse = {
                 data: null,
                 status: error.status ?? EHttpStatus.INTERNAL_SERVER_ERROR,
