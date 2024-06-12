@@ -11,7 +11,9 @@ export async function ipTrackerMiddleware(
     res: Response,
     next: NextFunction
 ) {
-    const ip: string = req.ip as string;
+    const ip: string =
+        (req.headers["x-forwarded-for"] as string)?.split(",").shift() ||
+        (req.socket?.remoteAddress as string);
 
     const existingIP = await db.query(
         `SELECT ip_address, count FROM IpAddress WHERE ip_address = '${ip}'`
