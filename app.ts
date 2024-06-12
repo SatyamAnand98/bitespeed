@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import express from "express";
 import { routes } from "./src/Routes";
 import db from "./src/database/";
+import { ipTrackerMiddleware } from "./src/middleware/ip.tracker";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ class App {
     private middleware(): void {
         this.express.use(bodyParser.urlencoded({ extended: true }));
         this.express.use(bodyParser.json());
+        this.express.use(ipTrackerMiddleware);
     }
 
     private database(): void {

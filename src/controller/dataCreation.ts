@@ -21,25 +21,23 @@ export class DataCreation {
             const responses = [];
 
             for (const contact of data) {
-                const { email, phone_number } = contact;
+                const { email, phoneNumber } = contact;
 
                 let query =
                     "SELECT * FROM Contact WHERE email = $1 OR phone_number = $2";
-                const params = [email || null, phone_number || null];
+                const params = [email || null, phoneNumber || null];
                 const result = await pool.query(query, params);
 
                 const exactMatch = result.rows.find(
                     (row) =>
-                        row.email === email && row.phone_number === phone_number
+                        row.email === email && row.phone_number === phoneNumber
                 );
 
                 if (exactMatch) {
                     responses.push({
                         primaryContactId: exactMatch.linkedId || exactMatch.id,
                         emails: [exactMatch.email].filter(Boolean),
-                        phone_numbers: [exactMatch.phone_number].filter(
-                            Boolean
-                        ),
+                        phoneNumber: [exactMatch.phone_number].filter(Boolean),
                         secondaryContactIds:
                             exactMatch.linkPrecedence === "secondary"
                                 ? [exactMatch.id]
@@ -62,7 +60,7 @@ export class DataCreation {
                         "INSERT INTO Contact (email, phone_number, linkedId, linkPrecedence) VALUES ($1, $2, $3, $4) RETURNING *";
                     const insertParams = [
                         email || null,
-                        phone_number || null,
+                        phoneNumber || null,
                         primaryContactId,
                         "secondary",
                     ];
@@ -76,7 +74,7 @@ export class DataCreation {
                         "INSERT INTO Contact (email, phone_number, linkPrecedence) VALUES ($1, $2, $3) RETURNING *";
                     const insertParams = [
                         email || null,
-                        phone_number || null,
+                        phoneNumber || null,
                         "primary",
                     ];
                     const insertResult = await pool.query(
@@ -90,7 +88,7 @@ export class DataCreation {
                 responses.push({
                     primaryContactId: primaryContactId,
                     emails: [newContact.email].filter(Boolean),
-                    phone_numbers: [newContact.phone_number].filter(Boolean),
+                    phoneNumber: [newContact.phone_number].filter(Boolean),
                     secondaryContactIds:
                         newContact.linkPrecedence === "secondary"
                             ? [newContact.id]

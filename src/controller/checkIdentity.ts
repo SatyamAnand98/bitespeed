@@ -12,10 +12,10 @@ export class Identity {
     static async identify(req: Request, res: Response) {
         try {
             const data = await identityValidator.validateAsync(req.body);
-            const { email, phone_number } = data;
+            const { email, phone_number: phoneNumber } = data;
             const { query, params } = new NestedQueryBuilder()
                 .setEmail(email)
-                .setPhoneNumber(phone_number)
+                .setPhoneNumber(phoneNumber)
                 .build();
 
             const initialResult = await pool.query(query, params);
@@ -27,7 +27,7 @@ export class Identity {
                 `;
                 const insertParams = [
                     email || null,
-                    phone_number || null,
+                    phoneNumber || null,
                     "primary",
                 ];
                 const insertResult = await pool.query(
@@ -94,8 +94,7 @@ export class Identity {
             );
 
             const exactMatch = initialResult.rows.find(
-                (row) =>
-                    row.email === email && row.phone_number === phone_number
+                (row) => row.email === email && row.phone_number === phoneNumber
             );
 
             if (
@@ -111,7 +110,7 @@ export class Identity {
 
                 const insertParams = [
                     email || null,
-                    phone_number || null,
+                    phoneNumber || null,
                     "secondary",
                     primaryContacts[0].id,
                 ];

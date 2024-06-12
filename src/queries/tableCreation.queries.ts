@@ -11,10 +11,10 @@ export const createTable = {
         );
         `,
 
-    user: `CREATE TABLE IF NOT EXISTS Users (
+    ipAddress: `CREATE TABLE IF NOT EXISTS IpAddress (
             id SERIAL PRIMARY KEY,
-            email VARCHAR(255),
-            password VARCHAR(255),
+            ip_address VARCHAR(255),
+            count INT DEFAULT 1,
             createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             deletedAt TIMESTAMP
